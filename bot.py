@@ -5,6 +5,7 @@ import re
 import logging
 import asyncio
 import threading
+import base64
 from pathlib import Path
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -40,7 +41,19 @@ stats = {"users": set(), "downloads": 0, "errors": 0}
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 DOWNLOAD_DIR = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
+COOKIES_FILE = Path(__file__).parent / "cookies.txt"
 TELEGRAM_MAX_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+def _setup_cookies():
+    """Write cookies file from YOUTUBE_COOKIES_BASE64 env var if set."""
+    cookies_b64 = os.environ.get("YOUTUBE_COOKIES_BASE64", "")
+    if cookies_b64:
+        try:
+            COOKIES_FILE.write_bytes(base64.b64decode(cookies_b64))
+            logger.info("Cookies file written from env var")
+        except Exception as exc:
+            logger.error("Failed to decode cookies: %s", exc)
 
 URL_REGEX = re.compile(r"https?://[^\s<>\"']+")
 
@@ -86,9 +99,11 @@ def _yt_dlp_opts(quality: str, output_path: str) -> dict:
             ),
         },
         "extractor_args": {
-            "youtube": ["player_client=web,mweb"],
+            "youtube": ["player_client=tv,default"],
         },
-        "js_runtimes": {"nodejs": {}},
+        "js_runtimes": {"node": {}},
+        "remote_components": {"ejs": "github"},
+        **({"cookiefile": str(COOKIES_FILE)} if COOKIES_FILE.exists() else {}),
     }
     if quality == "hd":
         common["format"] = (
@@ -293,6 +308,7 @@ def main():
         logger.error("TELEGRAM_BOT_TOKEN environment variable is not set!")
         raise SystemExit(1)
 
+    _setup_cookies()
     _start_health_server()
 
     app = Application.builder().token(BOT_TOKEN).build()
