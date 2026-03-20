@@ -77,13 +77,28 @@ def _yt_dlp_opts(quality: str, output_path: str) -> dict:
         "noplaylist": True,
         "merge_output_format": "mp4",
         "socket_timeout": 30,
+        "nocheckcertificate": True,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+        },
+        "extractor_args": {
+            "youtube": ["player_client=web,mweb"],
+        },
     }
     if quality == "hd":
-        common["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        common["format"] = (
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/"
+            "bestvideo+bestaudio/best[ext=mp4]/best"
+        )
     else:
         common["format"] = (
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/"
-            "best[height<=480][ext=mp4]/worst[ext=mp4]/worst"
+            "bestvideo[height<=480]+bestaudio/"
+            "best[height<=480][ext=mp4]/best[height<=480]/worst"
         )
     return common
 
@@ -103,7 +118,8 @@ async def _download_video(url: str, quality: str) -> Path | None:
 
     try:
         filename = await loop.run_in_executor(None, _do_download)
-    except Exception:
+    except Exception as exc:
+        logger.error("yt-dlp download failed for %s: %s", url, exc)
         return None
 
     path = Path(filename)
