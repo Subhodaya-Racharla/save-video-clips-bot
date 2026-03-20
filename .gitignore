@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+downloads/
+*.mp4
+*.webm
+*.mkv
+*.part
+.vscode/
+.idea/
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
