@@ -88,6 +88,7 @@ def _yt_dlp_opts(quality: str, output_path: str) -> dict:
         "extractor_args": {
             "youtube": ["player_client=web,mweb"],
         },
+        "js_runtimes": "nodejs",
     }
     if quality == "hd":
         common["format"] = (
