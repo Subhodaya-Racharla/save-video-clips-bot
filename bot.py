@@ -104,8 +104,8 @@ def _yt_dlp_opts(quality: str, output_path: str) -> dict:
     return common
 
 
-async def _download_video(url: str, quality: str) -> Path | None:
-    """Download video with yt-dlp and return the file path."""
+async def _download_video(url: str, quality: str) -> tuple[Path | None, str]:
+    """Download video with yt-dlp and return (file path, error_msg)."""
     suffix = datetime.now().strftime("%Y%m%d%H%M%S%f")
     output_path = str(DOWNLOAD_DIR / f"video_{suffix}.%(ext)s")
     opts = _yt_dlp_opts(quality, output_path)
@@ -121,16 +121,16 @@ async def _download_video(url: str, quality: str) -> Path | None:
         filename = await loop.run_in_executor(None, _do_download)
     except Exception as exc:
         logger.error("yt-dlp download failed for %s: %s", url, exc)
-        return None
+        return None, str(exc)
 
     path = Path(filename)
     # yt-dlp may change the extension after merging
     if not path.exists():
         for p in DOWNLOAD_DIR.glob(f"video_{suffix}.*"):
             if p.suffix != ".part":
-                return p
-        return None
-    return path
+                return p, ""
+        return None, "File not found after download"
+    return path, ""
 
 
 def _cleanup(path: Path | None):
@@ -193,13 +193,15 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     status_msg = await query.edit_message_text("⏳ Downloading...")
 
-    path = await _download_video(url, quality)
+    path, err = await _download_video(url, quality)
 
     if path is None:
         stats["errors"] += 1
+        error_detail = f"\n\nDebug: {err[:200]}" if err else ""
         await status_msg.edit_text(
             "❌ Couldn't download that video. The link may be invalid, "
             "the site unsupported, or the video private/restricted."
+            + error_detail
         )
         return
 
@@ -211,7 +213,7 @@ async def quality_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if quality == "hd":
             await status_msg.edit_text("⏳ Video too large — retrying in lower quality...")
-            path = await _download_video(url, "sd")
+            path, err = await _download_video(url, "sd")
             if path is None:
                 stats["errors"] += 1
                 await status_msg.edit_text("❌ Couldn't download a smaller version of this video.")
