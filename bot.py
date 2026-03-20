@@ -1,10 +1,11 @@
 import os
 import re
 import logging
-import tempfile
 import asyncio
+import threading
 from pathlib import Path
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -243,12 +244,35 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# Health-check server (keeps Render web service alive)
+# ---------------------------------------------------------------------------
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, *args):
+        pass  # suppress noisy request logs
+
+
+def _start_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("Health-check server running on port %s", port)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
     if not BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN environment variable is not set!")
         raise SystemExit(1)
+
+    _start_health_server()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
